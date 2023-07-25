@@ -28,6 +28,7 @@ ifneq ($(KERNEL_SRC),)
  include $(KERNEL_SRC)/../private/google-modules/soc/gs/Makefile.include
  EXTRA_CFLAGS+="-Wno-missing-prototypes"
 endif
+EXTRA_CFLAGS += -fstrict-flex-arrays=0
 
 ifneq ($(CONFIG_WLAN_TRACKER),)
 KBUILD_EXTRA_SYMBOLS=$(OUT_DIR)/../google-modules/wlan/wlan_ptracker/Module.symvers
