@@ -284,7 +284,7 @@ ifneq ($(CONFIG_BCMDHD_PCIE),)
         DHDCFLAGS += -DDHD_TX_CPL_BOUND=64
         DHDCFLAGS += -DDHD_TX_POST_BOUND=128
         DHDCFLAGS += -DDHD_RX_CPL_POST_BOUND=156
-        DHDCFLAGS += -DDHD_CTRL_CPL_POST_BOUND=64
+        DHDCFLAGS += -DDHD_CTRL_CPL_POST_BOUND=8
 endif
 
 ifneq ($(CONFIG_FIB_RULES),)
@@ -298,6 +298,8 @@ DHDCFLAGS += -DDHD_HAL_RING_DUMP_MEMDUMP
 DHDCFLAGS += -DDHD_DUMP_START_COMMAND
 # Enable pktid logging
 DHDCFLAGS += -DDHD_MAP_PKTID_LOGGING
+# Skip coredump for certain health check traps
+DHDCFLAGS += -DDHD_SKIP_COREDUMP_ON_HC
 else
 DHDCFLAGS += -DDHD_FILE_DUMP_EVENT
 # The debug dump file path is blank in DHD, it is defined in HAL.
@@ -384,9 +386,9 @@ DHDCFLAGS += -DWL_P2P_RAND
 #Custom Mapping of DSCP to User Priority
 DHDCFLAGS += -DWL_CUSTOM_MAPPING_OF_DSCP
 # Enable below define for production
-# ifneq ($(CONFIG_SOC_GOOGLE),)
-# DHDCFLAGS += -DMACADDR_PROVISION_ENFORCED
-# endif
+ifneq ($(CONFIG_SOC_GOOGLE),)
+DHDCFLAGS += -DMACADDR_PROVISION_ENFORCED
+endif
 ifneq ($(CONFIG_BCMDHD_PCIE),)
 	DHDCFLAGS += -DDHD_WAKE_STATUS
 endif
@@ -538,7 +540,9 @@ ifneq ($(CONFIG_BCMDHD_PCIE),)
 	DHDCFLAGS += -DDHD_USE_STATIC_CTRLBUF
 #Use coherent pool
 	DHDCFLAGS += -DDHD_USE_COHERENT_MEM_FOR_RING
+ifeq ($(CONFIG_SOC_GS201),)
 	DHDCFLAGS += -DDHD_ALLOC_COHERENT_MEM_FROM_ATOMIC_POOL
+endif
 # Runtime PM feature
 	DHDCFLAGS += -DDHD_PCIE_RUNTIMEPM -DMAX_IDLE_COUNT=5
 
@@ -705,6 +709,9 @@ DHDCFLAGS += -DWL_RAV_MSCS_NEG_IN_ASSOC
 
 # MAX_PFN_LIST_COUNT is defined as 64 in wlioctl_defs.h
 DHDCFLAGS += -DMAX_PFN_LIST_COUNT=16
+
+# Ignore the Coredump generation for the continuous packet drop
+DHDCFLAGS += -DSKIP_COREDUMP_PKTDROP_RXHC
 
 ##########################
 # driver type
@@ -907,6 +914,8 @@ ifneq ($(CONFIG_SOC_GOOGLE),)
 	DHDCFLAGS += -DPOWERUP_MAX_RETRY=0
 	# Explicitly disable Softap 6G
 	DHDCFLAGS += -DWL_DISABLE_SOFTAP_6G
+	# Increase assoc beacon wait time
+	DHDCFLAGS += -DDEFAULT_RECREATE_BI_TIMEOUT=40
 ifneq ($(filter y, $(CONFIG_BCM4389)),)
 	# Add chip specific suffix to the output on customer release
 	BCM_WLAN_CHIP_SUFFIX = 4389
@@ -942,6 +951,9 @@ else ifneq ($(CONFIG_ARCH_HISI),)
 
 	# Allow wl event forwarding as network packet
 	DHDCFLAGS += -DWL_EVENT_ENAB
+
+	# Enable memdump for logset beyond range only internal builds
+	DHDCFLAGS += -DDHD_LOGSET_BEYOND_MEMDUMP
 
 ifneq ($(CONFIG_BCMDHD_PCIE),)
 	# LB RXP Flow control to avoid OOM

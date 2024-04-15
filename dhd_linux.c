@@ -14088,6 +14088,16 @@ void dhd_detach(dhd_pub_t *dhdp)
 	}
 #endif /* CONFIG_HAS_EARLYSUSPEND && DHD_USE_EARLYSUSPEND */
 
+	if (dhdp->dbg) {
+#ifdef DEBUGABILITY
+#ifdef DBG_PKT_MON
+		dhd_os_dbg_detach_pkt_monitor(dhdp);
+		osl_spin_lock_deinit(dhd->pub.osh, dhd->pub.dbg->pkt_mon_lock);
+#endif /* DBG_PKT_MON */
+#endif /* DEBUGABILITY */
+		dhd_os_dbg_detach(dhdp);
+	}
+
 	/* delete all interfaces, start with virtual  */
 	if (dhd->dhd_state & DHD_ATTACH_STATE_ADD_IF) {
 		int i = 1;
@@ -14146,7 +14156,9 @@ void dhd_detach(dhd_pub_t *dhdp)
 			MFREE(dhd->pub.osh, ifp, sizeof(*ifp));
 			ifp = NULL;
 #ifdef WL_CFG80211
-			cfg->wdev->netdev = NULL;
+			if (cfg && cfg->wdev) {
+				cfg->wdev->netdev = NULL;
+			}
 #endif
 		}
 	}
@@ -14258,17 +14270,6 @@ void dhd_detach(dhd_pub_t *dhdp)
 		dhdp->dbus = NULL;
 	}
 #endif /* BCMDBUS */
-#ifdef DEBUGABILITY
-	if (dhdp->dbg) {
-#ifdef DBG_PKT_MON
-		dhd_os_dbg_detach_pkt_monitor(dhdp);
-		osl_spin_lock_deinit(dhd->pub.osh, dhd->pub.dbg->pkt_mon_lock);
-#endif /* DBG_PKT_MON */
-	}
-#endif /* DEBUGABILITY */
-	if (dhdp->dbg) {
-		dhd_os_dbg_detach(dhdp);
-	}
 #ifdef DHD_MEM_STATS
 	osl_spin_lock_deinit(dhd->pub.osh, dhd->pub.mem_stats_lock);
 #endif /* DHD_MEM_STATS */
@@ -19087,6 +19088,20 @@ char map_path[PATH_MAX] = VENDOR_PATH CONFIG_BCMDHD_MAP_PATH;
 extern int dhd_collect_coredump(dhd_pub_t *dhdp, dhd_dump_t *dump);
 #endif /* DHD_COREDUMP */
 
+#ifdef DHD_SSSR_COREDUMP
+static bool
+dhd_is_coredump_reqd(char *trapstr, uint str_len)
+{
+#ifdef DHD_SKIP_COREDUMP_ON_HC
+	if (trapstr && str_len &&
+		strnstr(trapstr, DHD_COREDUMP_IGNORE_TRAP_SIG, str_len)) {
+		return FALSE;
+	}
+#endif /* DHD_SKIP_COREDUMP_ON_HC */
+	return TRUE;
+}
+#endif /* DHD_SSSR_COREDUMP */
+
 static void
 dhd_mem_dump(void *handle, void *event_info, u8 event)
 {
@@ -19108,8 +19123,9 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 	char pc_fn[DHD_FUNC_STR_LEN] = "\0";
 	char lr_fn[DHD_FUNC_STR_LEN] = "\0";
 	trap_t *tr;
-	uint32 memdump_type;
+	bool collect_coredump = FALSE;
 #endif /* DHD_COREDUMP */
+	uint32 memdump_type;
 
 	DHD_ERROR(("%s: ENTER \n", __FUNCTION__));
 
@@ -19123,6 +19139,8 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 		DHD_ERROR(("%s: dhdp is NULL\n", __FUNCTION__));
 		return;
 	}
+	/* keep it locally to avoid overwriting in other contexts */
+	memdump_type = dhdp->memdump_type;
 
 	DHD_GENERAL_LOCK(dhdp, flags);
 	if (DHD_BUS_CHECK_DOWN_OR_DOWN_IN_PROGRESS(dhdp)) {
@@ -19202,6 +19220,7 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 		}
 #endif /* BOARD_HIKEY */
 	}
+	dhdp->skip_memdump_map_read = FALSE;
 #elif defined(DHD_DEBUGABILITY_DEBUG_DUMP)
 	dhd_debug_dump_to_ring(dhdp);
 #endif /* DHD_FILE_DUMP_EVENT */
@@ -19214,14 +19233,11 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 		memdump_type = DUMP_TYPE_BY_DSACK_HC_DUE_TO_ISR_DELAY;
 	} else if (dhdp->dsack_hc_due_to_dpc_delay) {
 		memdump_type = DUMP_TYPE_BY_DSACK_HC_DUE_TO_DPC_DELAY;
-	} else {
-		memdump_type = dhdp->memdump_type;
 	}
-
 	dhd_convert_memdump_type_to_str(memdump_type, dhdp->memdump_str,
 		DHD_MEMDUMP_LONGSTR_LEN, dhdp->debug_dump_subcmd);
 
-	if (dhdp->memdump_type == DUMP_TYPE_DONGLE_TRAP &&
+	if (memdump_type == DUMP_TYPE_DONGLE_TRAP &&
 		dhdp->dongle_trap_occured == TRUE) {
 		if (!dhdp->dsack_hc_due_to_isr_delay &&
 				!dhdp->dsack_hc_due_to_dpc_delay) {
@@ -19235,19 +19251,28 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 	DHD_ERROR(("%s: dump reason: %s\n", __FUNCTION__, dhdp->memdump_str));
 
 #ifdef DHD_SSSR_COREDUMP
-	ret = dhd_collect_coredump(dhdp, dump);
-	if (ret == BCME_ERROR) {
-		DHD_ERROR(("%s: dhd_collect_coredump() failed.\n", __FUNCTION__));
-		goto exit;
-	} else if (ret == BCME_UNSUPPORTED) {
-		DHD_LOG_MEM(("%s: Unable to collect SSSR dumps. Skip it.\n",
+	if (dhd_is_coredump_reqd(dhdp->memdump_str,
+		strnlen(dhdp->memdump_str, DHD_MEMDUMP_LONGSTR_LEN))) {
+		ret = dhd_collect_coredump(dhdp, dump);
+		if (ret == BCME_ERROR) {
+			DHD_ERROR(("%s: dhd_collect_coredump() failed.\n",
+				__FUNCTION__));
+			goto exit;
+		} else if (ret == BCME_UNSUPPORTED) {
+			DHD_LOG_MEM(("%s: Unable to collect SSSR dumps. Skip it.\n",
+				__FUNCTION__));
+		}
+		collect_coredump = TRUE;
+	} else {
+		DHD_PRINT(("%s: coredump not collected, dhd_is_coredump_reqd returns false\n",
 			__FUNCTION__));
 	}
 #endif /* DHD_SSSR_COREDUMP */
-	if (dhdp->memdump_type == DUMP_TYPE_BY_SYSDUMP) {
-		DHD_LOG_MEM(("%s: coredump is not supported for BY_SYSDUMP\n",
+	if (memdump_type == DUMP_TYPE_BY_SYSDUMP) {
+		DHD_LOG_MEM(("%s: coredump is not supported for BY_SYSDUMP/non trap cases\n",
 			__FUNCTION__));
-	} else {
+	} else if (collect_coredump) {
+		DHD_ERROR(("%s: writing SoC_RAM dump\n", __FUNCTION__));
 		if (wifi_platform_set_coredump(dhd->adapter, dump->buf,
 			dump->bufsize, dhdp->memdump_str)) {
 			DHD_ERROR(("%s: writing SoC_RAM dump failed\n", __FUNCTION__));
@@ -19305,7 +19330,7 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 	*/
 #ifdef DHD_LOG_DUMP
 	if (dhd->scheduled_memdump &&
-		dhdp->memdump_type != DUMP_TYPE_BY_SYSDUMP) {
+		memdump_type != DUMP_TYPE_BY_SYSDUMP) {
 		log_dump_type_t *flush_type = MALLOCZ(dhdp->osh,
 				sizeof(log_dump_type_t));
 		if (flush_type) {
@@ -19341,16 +19366,16 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 
 	if (dhd->pub.memdump_enabled == DUMP_MEMFILE_BUGON &&
 #ifdef DHD_LOG_DUMP
-		dhd->pub.memdump_type != DUMP_TYPE_BY_SYSDUMP &&
+		memdump_type != DUMP_TYPE_BY_SYSDUMP &&
 #endif /* DHD_LOG_DUMP */
-		dhd->pub.memdump_type != DUMP_TYPE_BY_USER &&
+		memdump_type != DUMP_TYPE_BY_USER &&
 #ifdef DHD_DEBUG_UART
 		dhd->pub.memdump_success == TRUE &&
 #endif	/* DHD_DEBUG_UART */
 #ifdef DNGL_EVENT_SUPPORT
-		dhd->pub.memdump_type != DUMP_TYPE_DONGLE_HOST_EVENT &&
+		memdump_type != DUMP_TYPE_DONGLE_HOST_EVENT &&
 #endif /* DNGL_EVENT_SUPPORT */
-		dhd->pub.memdump_type != DUMP_TYPE_CFG_VENDOR_TRIGGERED) {
+		memdump_type != DUMP_TYPE_CFG_VENDOR_TRIGGERED) {
 #ifdef SHOW_LOGTRACE
 		/* Wait till logtrace context is flushed */
 		dhd_flush_logtrace_process(dhd);

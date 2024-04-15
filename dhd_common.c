@@ -4763,7 +4763,7 @@ wl_show_host_event(dhd_pub_t *dhd_pub, wl_event_msg_t *event, void *event_data,
 	case WLC_E_PFN_PARTIAL_RESULT:
 #endif /* WL_SCHED_SCAN */
 	case WLC_E_PFN_SSID_EXT:
-		DHD_EVENT(("PNOEVENT: %s\n", event_name));
+		DHD_EVENT(("PNOEVENT: %s(%d)\n", event_name, event_type));
 		break;
 
 	case WLC_E_PFN_SCAN_BACKOFF:
@@ -5239,6 +5239,31 @@ dhd_parse_hck_common_sw_event(bcm_xtlv_t *wl_hc)
 
 }
 
+#ifdef SKIP_COREDUMP_PKTDROP_RXHC
+static bool
+dhd_skip_coredump_for_rxhc(bcm_xtlv_t *wl_hc)
+{
+	wl_rx_hc_info_v2_t *hck_rx_stall_v2;
+	uint16 id;
+	bool ignore_coredump = FALSE;
+
+	id = ltoh16(wl_hc->id);
+
+	if (id == WL_HC_DD_RX_STALL_V2) {
+		/*  map the hck_rx_stall_v2 structure to the value of the XTLV */
+		hck_rx_stall_v2 =
+			(wl_rx_hc_info_v2_t*)wl_hc;
+		if (hck_rx_stall_v2->rx_hc_dropped_all >=
+			hck_rx_stall_v2->rx_hc_alert_th) {
+			DHD_ERROR(("Skip the coredump for continous packet drop\n"));
+			ignore_coredump = TRUE;
+		}
+	}
+
+	return ignore_coredump;
+}
+#endif /* SKIP_COREDUMP_PKTDROP_RXHC */
+
 #endif /* PARSE_DONGLE_HOST_EVENT */
 #ifdef WL_CFGVENDOR_SEND_ALERT_EVENT
 static void
@@ -5399,6 +5424,11 @@ dngl_host_event_process(dhd_pub_t *dhdp, bcm_dngl_event_t *event,
 #ifdef PARSE_DONGLE_HOST_EVENT
 						dhd_parse_hck_common_sw_event(wl_hc);
 #endif /* PARSE_DONGLE_HOST_EVENT */
+#ifdef SKIP_COREDUMP_PKTDROP_RXHC
+						if (dhd_skip_coredump_for_rxhc(wl_hc) == TRUE) {
+							ignore_hc = TRUE;
+						}
+#endif /* SKIP_COREDUMP_PKTDROP_RXHC */
 #ifdef WL_CFGVENDOR_SEND_ALERT_EVENT
 						dhd_send_error_alert_event(dhdp, wl_hc);
 #endif /* WL_CFGVENDOR_SEND_ALERT_EVENT */
@@ -5855,8 +5885,10 @@ wl_process_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata, uint pktlen
 				del_sta = FALSE;
 			}
 #endif /* WL_CFG80211 */
-			DHD_EVENT(("%s: Link event %d, flags %x, status %x, role %d, del_sta %d\n",
-				__FUNCTION__, type, flags, status, role, del_sta));
+			DHD_EVENT(("%s: Link event %d, flags %x, status %x, "
+				"reason=%d, role %d, del_sta %d\n",
+				__FUNCTION__, type, flags, status,
+				reason, role, del_sta));
 
 			if (del_sta) {
 				DHD_EVENT(("%s: Deleting STA " MACDBG "\n",
@@ -9461,7 +9493,7 @@ int dhd_free_tdls_peer_list(dhd_pub_t *dhd_pub)
 * based on the debug level specified
 */
 void
-dhd_prhex(const char *msg, volatile uchar *buf, uint nbytes, uint8 dbg_level)
+dhd_prhex(const char *msg, volatile uchar *buf, uint nbytes, uint32 dbg_level)
 {
 	char line[128], *p;
 	int len = sizeof(line);
@@ -9469,12 +9501,15 @@ dhd_prhex(const char *msg, volatile uchar *buf, uint nbytes, uint8 dbg_level)
 	uint i;
 
 	if (msg && (msg[0] != '\0')) {
-		if (dbg_level == DHD_ERROR_VAL)
+		if (dbg_level == DHD_ERROR_VAL) {
 			DHD_ERROR(("%s:\n", msg));
-		else if (dbg_level == DHD_INFO_VAL)
+		} else if (dbg_level == DHD_INFO_VAL) {
 			DHD_INFO(("%s:\n", msg));
-		else if (dbg_level == DHD_TRACE_VAL)
+		} else if (dbg_level == DHD_TRACE_VAL) {
 			DHD_TRACE(("%s:\n", msg));
+		} else if (dbg_level == DHD_RPM_VAL) {
+			DHD_RPM(("%s:\n", msg));
+		}
 	}
 
 	p = line;
@@ -9492,12 +9527,16 @@ dhd_prhex(const char *msg, volatile uchar *buf, uint nbytes, uint8 dbg_level)
 
 		if (i % 16 == 15) {
 			/* flush line */
-			if (dbg_level == DHD_ERROR_VAL)
+			if (dbg_level == DHD_ERROR_VAL) {
 				DHD_ERROR(("%s:\n", line));
-			else if (dbg_level == DHD_INFO_VAL)
+			} else if (dbg_level == DHD_INFO_VAL) {
 				DHD_INFO(("%s:\n", line));
-			else if (dbg_level == DHD_TRACE_VAL)
+			} else if (dbg_level == DHD_TRACE_VAL) {
 				DHD_TRACE(("%s:\n", line));
+			} else if (dbg_level == DHD_RPM_VAL) {
+				DHD_RPM(("%s:\n", line));
+			}
+
 			p = line;
 			len = sizeof(line);
 		}
@@ -9505,12 +9544,15 @@ dhd_prhex(const char *msg, volatile uchar *buf, uint nbytes, uint8 dbg_level)
 
 	/* flush last partial line */
 	if (p != line) {
-		if (dbg_level == DHD_ERROR_VAL)
+		if (dbg_level == DHD_ERROR_VAL) {
 			DHD_ERROR(("%s:\n", line));
-		else if (dbg_level == DHD_INFO_VAL)
+		} else if (dbg_level == DHD_INFO_VAL) {
 			DHD_INFO(("%s:\n", line));
-		else if (dbg_level == DHD_TRACE_VAL)
+		} else if (dbg_level == DHD_TRACE_VAL) {
 			DHD_TRACE(("%s:\n", line));
+		} else if (dbg_level == DHD_RPM_VAL) {
+			DHD_RPM(("%s:\n", line));
+		}
 	}
 }
 
