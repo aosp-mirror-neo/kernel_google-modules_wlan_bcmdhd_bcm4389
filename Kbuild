@@ -298,6 +298,8 @@ DHDCFLAGS += -DDHD_HAL_RING_DUMP_MEMDUMP
 DHDCFLAGS += -DDHD_DUMP_START_COMMAND
 # Enable pktid logging
 DHDCFLAGS += -DDHD_MAP_PKTID_LOGGING
+# Skip coredump for certain health check traps
+DHDCFLAGS += -DDHD_SKIP_COREDUMP_ON_HC
 else
 DHDCFLAGS += -DDHD_FILE_DUMP_EVENT
 # The debug dump file path is blank in DHD, it is defined in HAL.
@@ -707,6 +709,9 @@ DHDCFLAGS += -DWL_RAV_MSCS_NEG_IN_ASSOC
 
 # MAX_PFN_LIST_COUNT is defined as 64 in wlioctl_defs.h
 DHDCFLAGS += -DMAX_PFN_LIST_COUNT=16
+
+# Ignore the Coredump generation for the continuous packet drop
+DHDCFLAGS += -DSKIP_COREDUMP_PKTDROP_RXHC
 
 ##########################
 # driver type
