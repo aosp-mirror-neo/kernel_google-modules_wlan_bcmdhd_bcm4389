@@ -10119,7 +10119,7 @@ wl_cfgnan_register_nmi_ndev(struct bcm_cfg80211 *cfg)
 	int ret = 0;
 	struct net_device* ndev = NULL;
 	struct wireless_dev *wdev = NULL;
-	uint8 temp_addr[ETHER_ADDR_LEN] = { 0x00, 0x90, 0x4c, 0x33, 0x22, 0x11 };
+	const uint8 temp_addr[ETHER_ADDR_LEN] = { 0x00, 0x90, 0x4c, 0x33, 0x22, 0x11 };
 	struct bcm_cfg80211 **priv;
 
 	if (cfg->nmi_ndev) {
