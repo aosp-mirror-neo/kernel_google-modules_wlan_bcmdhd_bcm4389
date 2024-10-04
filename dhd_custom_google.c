@@ -198,6 +198,7 @@ dhd_wlan_init_mac_addr(void)
 		mac_addr = (unsigned char *)
 				of_get_property(node, WIFI_MAC, &size);
 	}
+	of_node_put(node);
 
 	/* In case Missing Provisioned MAC Address, exit with error */
 	if (!mac_addr) {
@@ -429,7 +430,7 @@ int
 dhd_wlan_init_hardware_info(void)
 {
 
-	struct device_node *node = NULL;
+	struct device_node *node __free(device_node);
 	const char *hw_sku = NULL;
 	int hw_stage = -1;
 	int hw_major = -1;
@@ -486,6 +487,8 @@ dhd_wlan_init_hardware_info(void)
 				strcpy(val_revision, "NA");
 				break;
 		}
+
+		of_node_put(node);
 	}
 
 	node = of_find_node_by_path(CDB_PATH);
