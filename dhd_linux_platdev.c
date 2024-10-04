@@ -23,6 +23,7 @@
  * $Id$
  */
 #include <typedefs.h>
+#include <linux/cleanup.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -983,7 +984,7 @@ void
 concate_custom_board_revision(char *nv_path)
 {
 	uint32 board_revision = 0;
-	struct device_node *root_node = NULL;
+	struct device_node *root_node __free(device_node) = NULL;
 	char* wlan_node = NULL;
 
 	if (!nv_path) {

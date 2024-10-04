@@ -24,6 +24,7 @@
  *
  */
 
+#include <linux/cleanup.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/platform_device.h>
@@ -170,7 +171,7 @@ int
 dhd_wifi_init_gpio(void)
 {
 	char *wlan_node = DHD_DT_COMPAT_ENTRY;
-	struct device_node *root_node = NULL;
+	struct device_node *root_node __free(device_node);
 
 	root_node = of_find_compatible_node(NULL, NULL, wlan_node);
 	if (!root_node) {
