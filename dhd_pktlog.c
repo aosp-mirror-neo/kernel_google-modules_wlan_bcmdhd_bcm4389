@@ -1,7 +1,7 @@
 /*
  * DHD debugability packet logging support
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -43,6 +43,7 @@
 #include <bcmicmp.h>
 #include <bcmtlv.h>
 #include <802.11.h>
+#include <802.11u.h>
 #include <eap.h>
 #include <eapol.h>
 #include <bcmendian.h>
@@ -1014,6 +1015,7 @@ dhd_pktlog_filter_info(dhd_pktlog_filter_t *filter)
 
 	return BCME_OK;
 }
+
 bool
 dhd_pktlog_filter_matched(dhd_pktlog_filter_t *filter, char *data, uint32 pktlog_case)
 {
@@ -1554,10 +1556,14 @@ dhd_pktlog_dump_write_file(dhd_pub_t *dhdp)
 {
 	struct file *w_pcap_fp = NULL;
 	uint32 file_mode;
+	MM_SEGMENT_T fs;
 	char pktlogdump_path[128];
 	int ret = BCME_OK;
 
 	dhd_pktlog_get_filename(dhdp, pktlogdump_path, 128);
+
+	GETFS_AND_SETFS_TO_KERNEL_DS(fs);
+
 	file_mode = O_CREAT | O_WRONLY;
 
 	w_pcap_fp = dhd_filp_open(pktlogdump_path, file_mode, 0664);
@@ -1584,6 +1590,8 @@ fail:
 	if (!IS_ERR(w_pcap_fp)) {
 		dhd_filp_close(w_pcap_fp, NULL);
 	}
+
+	SETFS(fs);
 
 #ifdef DHD_DUMP_MNGR
 	if (ret >= 0) {

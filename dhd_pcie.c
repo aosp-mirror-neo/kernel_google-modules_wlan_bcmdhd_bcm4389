@@ -1,7 +1,7 @@
 /*
  * DHD Bus Module for PCIE
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -9481,7 +9481,6 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 			/* Wait for D3 ACK for D3_ACK_RESP_TIMEOUT seconds */
 			timeleft = dhd_os_d3ack_wait(bus->dhd, &bus->wait_for_d3_ack);
 		}
-
 #ifdef DHD_RECOVER_TIMEOUT
 		/* XXX: WAR for missing D3 ACK MB interrupt */
 		if (bus->wait_for_d3_ack == 0) {
@@ -14754,10 +14753,10 @@ dhd_bus_flow_ring_create_response(dhd_bus_t *bus, uint16 flowid, int32 status)
 	DHD_INFO(("%s :Flow Response %d \n", __FUNCTION__, flowid));
 
 	/* Boundary check of the flowid */
-	if (flowid > bus->dhd->max_tx_flowid) {
-		DHD_ERROR(("%s: flowid is invalid %d, max id %d\n", __FUNCTION__,
-			flowid, bus->dhd->max_tx_flowid));
-		return;
+	if (DHD_FLOW_RING_INV_ID(bus->dhd, flowid)) {
+		DHD_ERROR(("%s: invalid flowid:%d alloc_max:%d fid_max:%d\n",
+			__FUNCTION__, flowid, bus->dhd->num_h2d_rings,
+			bus->dhd->max_tx_flowid));
 	}
 
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flowid);
@@ -14861,10 +14860,10 @@ dhd_bus_flow_ring_delete_response(dhd_bus_t *bus, uint16 flowid, uint32 status)
 	DHD_INFO(("%s :Flow Delete Response %d \n", __FUNCTION__, flowid));
 
 	/* Boundary check of the flowid */
-	if (flowid > bus->dhd->max_tx_flowid) {
-		DHD_ERROR(("%s: flowid is invalid %d, max id %d\n", __FUNCTION__,
-			flowid, bus->dhd->max_tx_flowid));
-		return;
+	if (DHD_FLOW_RING_INV_ID(bus->dhd, flowid)) {
+		DHD_ERROR(("%s: invalid flowid:%d alloc_max:%d fid_max:%d\n",
+			__FUNCTION__, flowid, bus->dhd->num_h2d_rings,
+			bus->dhd->max_tx_flowid));
 	}
 
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flowid);
@@ -14944,10 +14943,10 @@ dhd_bus_flow_ring_flush_response(dhd_bus_t *bus, uint16 flowid, uint32 status)
 	}
 
 	/* Boundary check of the flowid */
-	if (flowid > bus->dhd->max_tx_flowid) {
-		DHD_ERROR(("%s: flowid is invalid %d, max id %d\n", __FUNCTION__,
-			flowid, bus->dhd->max_tx_flowid));
-		return;
+	if (DHD_FLOW_RING_INV_ID(bus->dhd, flowid)) {
+		DHD_ERROR(("%s: invalid flowid:%d alloc_max:%d fid_max:%d\n",
+			__FUNCTION__, flowid, bus->dhd->num_h2d_rings,
+			bus->dhd->max_tx_flowid));
 	}
 
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flowid);

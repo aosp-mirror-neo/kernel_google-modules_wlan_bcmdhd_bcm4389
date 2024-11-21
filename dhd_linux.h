@@ -1,7 +1,7 @@
 /*
  * DHD Linux header file (dhd_linux exports for cfg80211 and other components)
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -80,6 +80,7 @@
 #define ALL_ADDR_VAL (PC_FOUND_BIT | LR_FOUND_BIT)
 #define READ_NUM_BYTES 1000
 #define DHD_FUNC_STR_LEN 80
+#define DHD_TRAP_STR_LEN (DHD_FUNC_STR_LEN * 2)
 
 #define DHD_COREDUMP_MAGIC 0xDDCEDACF
 #define TLV_TYPE_LENGTH_SIZE	(8u)
