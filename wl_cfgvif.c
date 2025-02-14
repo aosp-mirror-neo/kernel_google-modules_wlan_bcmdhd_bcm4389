@@ -5334,7 +5334,9 @@ wl_cfg80211_set_mac_acl(struct wiphy *wiphy, struct net_device *cfgdev,
 
 #ifdef WL_CFG80211_MONITOR
 int
-wl_cfg80211_set_monitor_channel(struct wiphy *wiphy, struct cfg80211_chan_def *chandef)
+wl_cfg80211_set_monitor_channel(struct wiphy *wiphy,
+				struct net_device *dev,
+				struct cfg80211_chan_def *chandef)
 {
 	int err = BCME_OK;
 	struct bcm_cfg80211 *cfg;

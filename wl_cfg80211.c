@@ -602,7 +602,8 @@ s32 wl_cfg80211_add_del_bss(struct bcm_cfg80211 *cfg,
 	wl_iftype_t brcm_iftype, s32 del, u8 *addr);
 #ifdef WL_CFG80211_MONITOR
 int wl_cfg80211_set_monitor_channel(struct wiphy *wiphy,
-	struct cfg80211_chan_def *chandef);
+				    struct net_device *dev,
+				    struct cfg80211_chan_def *chandef);
 #endif /* WL_CFG80211_MONITOR */
 #ifdef GTK_OFFLOAD_SUPPORT
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 1, 0))
