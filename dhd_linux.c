@@ -482,6 +482,7 @@ static void dhd_ifadd_event_handler(void *handle, void *event_info, u8 event);
 static void dhd_ifdel_event_handler(void *handle, void *event_info, u8 event);
 static void dhd_set_mac_addr_handler(void *handle, void *event_info, u8 event);
 static void dhd_set_mcast_list_handler(void *handle, void *event_info, u8 event);
+static void dhd_ndev_upd_features_handler(void *handle, void *event_info, u8 event);
 #ifdef BCM_ROUTER_DHD
 static void dhd_inform_dhd_monitor_handler(void *handle, void *event_info, u8 event);
 #endif
@@ -3432,6 +3433,43 @@ done:
 }
 
 static void
+dhd_ndev_upd_features_handler(void *handle, void *event_info, u8 event)
+{
+	struct net_device *net = event_info;
+	dhd_info_t *dhd = DHD_DEV_INFO(net);
+
+	if (event != DHD_WQ_WORK_NDEV_UPD_FEATURES) {
+		DHD_ERROR(("%s: unexpected event \n", __FUNCTION__));
+		return;
+	}
+	if (!net) {
+		DHD_ERROR(("%s: event data is null \n", __FUNCTION__));
+		return;
+	}
+	/* Exit if dhd_stop is in progress which will be called with rtnl_lock */
+	while (!rtnl_trylock()) {
+		if (dhd->pub.stop_in_progress) {
+			DHD_PRINT(("%s: exit as dhd_stop in progress\n", __FUNCTION__));
+			return;
+		}
+		/* wait for 20msec and retry rtnl_lock */
+		DHD_PRINT(("%s: rtnl_lock held mostly by dhd_open, wait\n", __FUNCTION__));
+		OSL_SLEEP(50);
+	}
+	DHD_PRINT(("%s: netdev_update_features\n", __FUNCTION__));
+	netdev_update_features(net);
+	rtnl_unlock();
+}
+
+static void
+dhd_ndev_upd_features(dhd_info_t *dhd, struct net_device *net)
+{
+	dhd_deferred_schedule_work(dhd->dhd_deferred_wq, (void *)net,
+		DHD_WQ_WORK_NDEV_UPD_FEATURES, dhd_ndev_upd_features_handler,
+		DHD_WQ_WORK_PRIORITY_HIGH);
+}
+
+static void
 dhd_set_mcast_list_handler(void *handle, void *event_info, u8 event)
 {
 	dhd_info_t *dhd = handle;
@@ -4742,9 +4780,11 @@ dhd_rpm_state_thread(void *data)
 {
 	tsk_ctl_t *tsk = (tsk_ctl_t *)data;
 	dhd_info_t *dhd = (dhd_info_t *)tsk->parent;
+	int ret = 0;
 
 	while (1) {
-		if (down_interruptible (&tsk->sema) == 0) {
+		ret = down_interruptible (&tsk->sema);
+		if (ret == 0) {
 			unsigned long flags;
 			unsigned long jiffies_at_start = jiffies;
 			unsigned long time_lapse;
@@ -4788,10 +4828,14 @@ dhd_rpm_state_thread(void *data)
 				DHD_GENERAL_UNLOCK(&dhd->pub, flags);
 			}
 		} else {
+			DHD_PRINT(("RPM thread is signalled or timeout ret:%d\n", ret));
 			break;
 		}
 	}
 
+	DHD_PRINT(("%s: RPM thread complete and exit\n", __func__));
+	dhd->thr_rpm_ctl.thr_pid = DHD_PID_KT_TERMINATED;
+	dhd->thr_rpm_ctl.terminated = TRUE;
 	KTHREAD_COMPLETE_AND_EXIT(&tsk->completed, 0);
 }
 
@@ -5781,8 +5825,12 @@ dhd_add_monitor_if(dhd_info_t *dhd)
 	/* XXX: This is called from IOCTL path, in this case, rtnl_lock is already taken.
 	 * So, register_netdev() shouldn't be called. It leads to deadlock.
 	 * To avoid deadlock due to rtnl_lock(), register_netdevice() should be used.
+	 * Not called from cfg80211 api interface,
+	 * need to directly use register_netdevice and not the
+	 * cfg80211_register_netdevice version. Otherwise will hit a kernel panic
+	 * since the wdev pointer is null.
 	 */
-	ret = dhd_register_net(dev, false);
+	ret = register_netdevice(dev);
 	if (ret) {
 		DHD_ERROR(("%s, register_netdev failed for %s\n",
 			__FUNCTION__, dev->name));
@@ -5861,7 +5909,16 @@ dhd_del_monitor_if(dhd_info_t *dhd)
 		if (dhd->monitor_dev->reg_state == NETREG_UNINITIALIZED) {
 			free_netdev(dhd->monitor_dev);
 		} else {
-			dhd_unregister_net(dhd->monitor_dev, !rtnl_is_locked());
+			/* Since the dhd monitor is called from an ioctl and not the cfg80211 API
+			 * interface, we need to directly use register_netdevice and not the
+			 * cfg80211_register_netdevice version. Otherwise will hit a kernel panic
+			 * since the wdev pointer is null.
+			 */
+			if (!rtnl_is_locked()) {
+				unregister_netdev(dhd->monitor_dev);
+			} else {
+				unregister_netdevice(dhd->monitor_dev);
+			}
 		}
 		dhd->monitor_dev = NULL;
 	}
@@ -7180,7 +7237,7 @@ dhd_open(struct net_device *net)
 #endif /* DHD_LB_TXP */
 		dhd->dhd_lb_candidacy_override = FALSE;
 #endif /* DHD_LB */
-		netdev_update_features(net);
+		dhd_ndev_upd_features(dhd, net);
 #ifdef DHD_PM_OVERRIDE
 		g_pm_override = FALSE;
 #endif /* DHD_PM_OVERRIDE */
@@ -14205,7 +14262,7 @@ void dhd_detach(dhd_pub_t *dhdp)
 
 			dhd_if_del_sta_list(ifp);
 
-			MFREE(dhd->pub.osh, ifp, sizeof(*ifp));
+			MFREE(dhd->pub.osh, dhd->iflist[0], sizeof(*ifp));
 			ifp = NULL;
 #ifdef WL_CFG80211
 			if (cfg && cfg->wdev) {
@@ -15362,6 +15419,15 @@ exit:
 
 }
 
+bool dhd_is_rpm_thread_alive(dhd_pub_t *pub)
+{
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+	if (dhd->thr_rpm_ctl.thr_pid < 0) {
+		return FALSE;
+	} else {
+		return TRUE;
+	}
+}
 #endif /* DHD_PCIE_RUNTIMEPM */
 
 int
