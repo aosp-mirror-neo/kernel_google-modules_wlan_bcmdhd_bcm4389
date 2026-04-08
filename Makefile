@@ -26,9 +26,9 @@ M ?= $(shell pwd)
 ifneq ($(KERNEL_SRC),)
  KBUILD_OPTIONS += BCMDHD_ROOT=$(shell cd $(KERNEL_SRC); readlink -e $(M))
  -include $(KERNEL_SRC)/../private/google-modules/soc/gs/Makefile.include
- EXTRA_CFLAGS+="-Wno-missing-prototypes"
+ CFLAGS_MODULE+="-Wno-missing-prototypes"
 endif
-EXTRA_CFLAGS += -fstrict-flex-arrays=0
+CFLAGS_MODULE += -fstrict-flex-arrays=0
 
 ifneq ($(KERNEL_SRC),)
  KBUILD_OPTIONS += BCMDHD_ROOT=$(shell cd $(KERNEL_SRC); readlink -e $(M))
@@ -36,7 +36,7 @@ endif
 
 all:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) \
-	$(KBUILD_OPTIONS) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" modules
+	$(KBUILD_OPTIONS) CFLAGS_MODULE="$(CFLAGS_MODULE)" KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" modules
 modules_install:
 	@echo "$(MAKE) INSTALL_MOD_STRIP=1 M=$(M) -C $(KERNEL_SRC) modules_install"
 	@$(MAKE) INSTALL_MOD_STRIP=1 M=$(M) -C $(KERNEL_SRC) modules_install
