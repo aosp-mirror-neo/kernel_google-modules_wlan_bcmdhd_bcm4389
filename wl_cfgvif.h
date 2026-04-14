@@ -185,7 +185,7 @@ extern s32 wl_cfg80211_tdls_oper(struct wiphy *wiphy, struct net_device *dev,
 #endif
 #endif /* LINUX_VERSION > KERNEL_VERSION(3,2,0) || WL_COMPAT_WIRELESS */
 
-extern s32 wl_notify_connect_status_ap(struct bcm_cfg80211 *cfg, struct net_device *ndev,
+extern s32 wl_notify_connect_status_ap(struct bcm_cfg80211 *cfg, struct wireless_dev *wdev,
 	const wl_event_msg_t *e, void *data);
 extern s32 wl_cfg80211_change_virtual_iface(struct wiphy *wiphy, struct net_device *ndev,
 	enum nl80211_iftype type,

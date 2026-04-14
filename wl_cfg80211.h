@@ -3032,8 +3032,10 @@ wl_iftype_to_str(int wl_iftype)
 	wdev_to_ndev(wdev) : bcmcfg_to_prmry_ndev(cfg))
 #if defined(WL_CFG80211_P2P_DEV_IF)
 #define cfgdev_to_wlc_ndev(cfgdev, cfg)	wdev_to_wlc_ndev(cfgdev, cfg)
+#define cfgdev_to_wlc_wdev(cfgdev) (cfgdev)
 #define bcmcfg_to_prmry_cfgdev(cfgdev, cfg) bcmcfg_to_prmry_wdev(cfg)
 #else
+#error "FIXME: cfgdev_to_wlc_wdev() not supported"
 #define cfgdev_to_wlc_ndev(cfgdev, cfg)	(cfgdev)
 #define bcmcfg_to_prmry_cfgdev(cfgdev, cfg) (cfgdev)
 #endif /* WL_CFG80211_P2P_DEV_IF */
