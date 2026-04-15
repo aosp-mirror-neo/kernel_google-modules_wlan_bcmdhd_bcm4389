@@ -108,7 +108,6 @@ static void sscd_release(struct device *dev);
 static struct sscd_platform_data sscd_pdata;
 static struct platform_device sscd_dev = {
 	.name            = DEVICE_NAME,
-	.driver_override = SSCD_NAME,
 	.id              = -1,
 	.dev             = {
 		.platform_data = &sscd_pdata,
@@ -892,6 +891,7 @@ dhd_wlan_init(void)
 #endif /* CONFIG_BROADCOM_WIFI_RESERVED_MEM */
 
 #ifdef DHD_COREDUMP
+	device_set_driver_override(&sscd_dev.dev, SSCD_NAME);
 	platform_device_register(&sscd_dev);
 #endif /* DHD_COREDUMP */
 
