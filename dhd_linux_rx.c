@@ -1613,14 +1613,14 @@ dhd_rx_pktpool_deinit(dhd_info_t *dhd)
 
 	if (tsk->parent && tsk->thr_pid >= 0) {
 		PROC_STOP_USING_BINARY_SEMA(tsk);
+		/* skb list manipulation functions use internal
+		 * spin lock, so no need to take separate lock
+		 */
+		skb_queue_purge(&rx_pool->skb_q);
 	} else {
 		DHD_ERROR(("%s: rx_pktpool_thread(%ld) not inited\n",
 			__FUNCTION__, tsk->thr_pid));
 	}
-	/* skb list manipulation functions use internal
-	 * spin lock, so no need to take separate lock
-	 */
-	skb_queue_purge(&rx_pool->skb_q);
 	rx_pool->max_size = 0;
 	DHD_ERROR(("%s: de-alloc'd rx buffers in pool \n",
 		__FUNCTION__));
